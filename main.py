@@ -1,3 +1,4 @@
+import argparse
 import dataclasses
 import twitter
 import yaml
@@ -116,8 +117,23 @@ def CreateApi():
   return None
     
 
+parser = argparse.ArgumentParser(
+    description='Provides Twitter account management using a plaintext config file.')
+parser.add_argument('operation', type=str, choices=['download'],
+                    help=('The operation to perform: \n'
+                          '    download: downloads account data from Twitter'
+                          ' and outputs to your config file\n'))
+parser.add_argument('config_file', type=str, help='The address of your config file.')
+
 if __name__ == '__main__':
+  args = parser.parse_args()
   api = CreateApi()
-  print(api.VerifyCredentials())
-  account = CreateTwitterAccount(api)
-  print(account)
+  if args.operation == 'download':
+    print('Performing download from TwitterAPI into config file...')
+    account = CreateTwitterAccount(api)
+    with open(args.config_file, 'w') as stream:
+      print('Account data downloaded, writing to file...')
+      yaml.dump(account.ToDict(), stream)
+      print('{0} file updated from TwitterAPI source.'.format(args.config_file))
+  else:
+    raise ValueError('Unsupported operation: {0}'.format(args.operation))
