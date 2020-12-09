@@ -143,7 +143,10 @@ class AccountMerger:
     if input('    Proceed? y/n: ') == 'y':
       for follow in follows_to_add:
         print('    Following: @{0}'.format(follow))
-        api.CreateFriendship(screen_name=follow)
+        try:
+          api.CreateFriendship(screen_name=follow)
+        except twitter.TwitterError as e:
+          print('   Error adding @{0}: {1}'.format(follow, e))
       for follow in follows_to_remove:
         print('    Unfollowing: @{0}'.format(follow))
         api.DestroyFriendship(screen_name=follow)
@@ -163,7 +166,7 @@ class AccountMerger:
           config_list = next(l for l in config_lists if l.name == list_to_add)
           mode = 'private' if config_list.is_private else 'public'
           new_list = api.CreateList(config_list.name, mode=mode)
-          canonical_lists[new_list.name] = TwitterList.FromPythonTwitter(new_list)
+          canonical_lists[new_list.name] = TwitterList.FromPythonTwitter(new_list, [])
         for list_to_remove in lists_to_remove:
           print('    Removing list: {0}'.format(list_to_remove))
           api_list = next(l for l in api_lists if l.name == list_to_remove)
@@ -193,7 +196,10 @@ class AccountMerger:
       for member in members_to_add:
         print('   Adding member to "{0}": @{1}'.format(config_list.name,
                                                        member))
-        api.CreateListsMember(list_id=api_list.id, screen_name=member)
+        try:
+          api.CreateListsMember(list_id=api_list.id, screen_name=member)
+        except twitter.TwitterError as e:
+          print('   Error add list member @{0}: {1}'.format(member, e))
       for member in members_to_remove:
         print('   Removing member from "{0}": @{1}'.format(config_list.name,
                                                            member))
