@@ -26,6 +26,10 @@ class TwitterUser:
   def FromDict(d):
     return TwitterUser(id=d['id'], username=d['username'])
 
+  @staticmethod
+  def FromPythonTwitter(user):
+    return TwitterUser(id=user.id, username=user.screen_name)
+
 
 @dataclasses.dataclass
 class TwitterList:
@@ -55,6 +59,14 @@ class TwitterList:
                        members=[TwitterUser.FromDict(member)
                                 for member in d['members']])
 
+  @staticmethod
+  def FromPythonTwitter(tlist, members):
+    return TwitterList(id=tlist.id,
+                       name=tlist.name,
+                       is_private=(tlist.mode == 'private'),
+                       members=[TwitterUser.FromPythonTwitter(member)
+                                for member in members])
+
 
 @dataclasses.dataclass
 class TwitterAccount:
@@ -80,28 +92,19 @@ class TwitterAccount:
                           lists=[TwitterList.FromDict(l)
                                  for l in d['lists']])
 
-
-def CreateTwitterAccount(api):
-  account = TwitterAccount()
-  # Follows
-  friends = api.GetFriends()
-  account.follows = [
-      TwitterUser(id=friend.id, username=friend.screen_name)
-      for friend in friends]
-  # Lists
-  account.lists = []
-  lists = api.GetLists()
-  for l in lists:
-    tl = TwitterList()
-    tl.id = l.id
-    tl.name = l.name
-    tl.is_private = l.mode == 'private'
-    members = api.GetListMembers(list_id=l.id)
-    tl.members = [
-      TwitterUser(id=member.id, username=member.screen_name)
-      for member in members]
-    account.lists.append(tl)
-  return account
+  @staticmethod
+  def FromApi(api):
+    account = TwitterAccount()
+    # Follows
+    account.follows = [TwitterUser.FromPythonTwitter(friend)
+                       for friend in api.GetFriends()]
+    # Lists
+    account.lists = []
+    lists = api.GetLists()
+    for l in lists:
+      members = api.GetListMembers(list_id=l.id)
+      account.lists.append(TwitterList.FromPythonTwitter(l, members))
+    return account
 
 
 def CreateApi():
@@ -130,7 +133,7 @@ if __name__ == '__main__':
   api = CreateApi()
   if args.operation == 'download':
     print('Performing download from TwitterAPI into config file...')
-    account = CreateTwitterAccount(api)
+    account = TwitterAccount.FromApi(api)
     with open(args.config_file, 'w') as stream:
       print('Account data downloaded, writing to file...')
       yaml.dump(account.ToDict(), stream)
