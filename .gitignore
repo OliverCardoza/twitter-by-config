@@ -1,2 +1,4 @@
-secrets.yaml
+# Ignore YAML files which may contain secrets or account data.
+*.yaml
+
 __pycache__
