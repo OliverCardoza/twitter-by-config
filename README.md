@@ -11,18 +11,62 @@ sudo apt-get install python3 python3-pip
 pip3 install python-twitter pyyaml
 ```
 
-## WIP
+## Usage Instructions
 
-So far can import some basic data and print to console:
+### Set up
+
+To use the script you will need to configure a Twitter application to access
+the Twitter API. Collecting the varius keys, secrets, and tokens is outlined
+on the `python-twitter` documentation here:
+
+https://python-twitter.readthedocs.io/en/latest/getting_started.html
+
+This is a bit of a pain but shouldn't take more than 5 - 10 minutes. Once you
+have collected the relevant tokens make a copy of `secrets_example.yaml`
+called `secrets.yaml` and copy your keys there:
 
 ```
-python3 main.py
+cp secrets_example.yaml secrets.yaml
+vim secrets.yaml
 ```
 
-TODO
+### Download Account data
 
-*  import from Twitter to create YAML
-*  build model from YAML
-*  compare model built from YAML to Twitter source
-*  perform inserts to TwitterApi to make it superset of YAML
-*  conditionally perform deletes to TwitterApi to make it consistent with YAML
+Download your account data to a config file, e.g. twitter.yaml
+
+```
+python3 main.py download twitter.yaml
+```
+
+This is the recommended starting point for your config file by basing it on
+pre-existing data you've already configured. Now you can make edits to this
+config file and use it to configure your Twitter account by uploading it
+as described in the next section.
+
+### Uploading Account config
+
+This process will take your config file as the source-of-truth and make
+mutations to your account via the Twitter API. All mutations will outline the
+proposed changes and ask for confirmation [y/n] before proceeding.
+
+```
+python3 main.py upload twitter.yaml
+```
+
+By default this will only make constructive operations (add follows, add lists,
+add list members). To enable it to make destructive operations (unfollow,
+delete lists, delete list members) you must enable the `--destructive_upload`
+flag:
+
+```
+python3 main.py --destructive_upload=True upload twitter.yaml 
+```
+
+## Caveats
+
+This script has limited functionality. It supports:
+
+*   maintaining the list of users your account follows
+*   maintaining your Twitter lists (name, private/public, members)
+
+It does not support blocks, mutes, bookmarks, likes, tweets, etc.
