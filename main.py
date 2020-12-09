@@ -5,52 +5,89 @@ import yaml
 
 @dataclasses.dataclass
 class TwitterUser:
-  """Class representing a Twitter user.
+  '''Class representing a Twitter user.
   
   This is the primary object that is part of follow/block/list collections.
 
   Upsync to Twitter:
   - Only name is required.
-  """
+  '''
   id: int = None
   name: str = None
+
+  def ToDict(self):
+    return {
+      'id': self.id,
+      'name': self.name,
+    }
+
+  @staticmethod
+  def FromDict(d):
+    return TwitterUser(id=d['id'], name=d['name'])
 
 
 @dataclasses.dataclass
 class TwitterList:
-  """Class representing a Twitter list.
+  '''Class representing a Twitter list.
 
   Upsync to Twitter:
   - Only name and users are required.
-  """
+  '''
   id: int = None
   name: str = None
   is_private: bool = True
   members: list = None # list[TwitterUser]
 
+  def ToDict(self):
+    return {
+      'id': self.id,
+      'name': self.name,
+      'is_private': self.is_private,
+      'members': [member.ToDict() for member in self.members],
+    }
+
+  @staticmethod
+  def FromDict(d):
+    return TwitterList(id=d['id'],
+                       name=d['name'],
+                       is_private=d['is_private'],
+                       members=[TwitterUser.FromDict(member)
+                                for member in d['members']])
+
 
 @dataclasses.dataclass
 class TwitterAccount:
-  """Primary model for a Twitter account's configured properties.
+  '''Primary model for a Twitter account's configured properties.
 
   This is the primary model used when pulling current state from Twitter API
   for the purpose of YAML export. It is also the primary model populated from
   a twitter-by-config YAML file for the purpose of updating to Twitter.
-  """
+  '''
   follows: list = None # list[TwitterUser] 
   lists: list = None # list[TwitterList]
+
+  def ToDict(self):
+    return {
+      'follows': [follow.ToDict() for follow in self.follows],
+      'lists': [l.ToDict() for l in self.lists],
+    }
+
+  @staticmethod
+  def FromDict(d):
+    return TwitterAccount(follows=[TwitterUser.FromDict(follow)
+                                   for follow in d['follows']],
+                          lists=[TwitterList.FromDict(l)
+                                 for l in d['lists']])
 
 
 def CreateTwitterAccount(api):
   account = TwitterAccount()
   # Follows
-  print('populating follows')
   friends = api.GetFriends()
   account.follows = [
       TwitterUser(id=friend.id, name=friend.name)
       for friend in friends]
   # Lists
-  print('populating lists')
   account.lists = []
   lists = api.GetLists()
   for l in lists:
