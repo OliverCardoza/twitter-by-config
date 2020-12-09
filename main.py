@@ -11,20 +11,20 @@ class TwitterUser:
   This is the primary object that is part of follow/block/list collections.
 
   Upsync to Twitter:
-  - Only name is required.
+  - Only username is required.
   '''
   id: int = None
-  name: str = None
+  username: str = None
 
   def ToDict(self):
     return {
       'id': self.id,
-      'name': self.name,
+      'username': self.username,
     }
 
   @staticmethod
   def FromDict(d):
-    return TwitterUser(id=d['id'], name=d['name'])
+    return TwitterUser(id=d['id'], username=d['username'])
 
 
 @dataclasses.dataclass
@@ -32,7 +32,7 @@ class TwitterList:
   '''Class representing a Twitter list.
 
   Upsync to Twitter:
-  - Only name and users are required.
+  - Only name and members are required.
   '''
   id: int = None
   name: str = None
@@ -86,7 +86,7 @@ def CreateTwitterAccount(api):
   # Follows
   friends = api.GetFriends()
   account.follows = [
-      TwitterUser(id=friend.id, name=friend.name)
+      TwitterUser(id=friend.id, username=friend.screen_name)
       for friend in friends]
   # Lists
   account.lists = []
@@ -98,7 +98,7 @@ def CreateTwitterAccount(api):
     tl.is_private = l.mode == 'private'
     members = api.GetListMembers(list_id=l.id)
     tl.members = [
-      TwitterUser(id=member.id, name=member.name)
+      TwitterUser(id=member.id, username=member.screen_name)
       for member in members]
     account.lists.append(tl)
   return account
