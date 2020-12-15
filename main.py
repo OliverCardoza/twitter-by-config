@@ -88,6 +88,8 @@ class MetaList:
   '''
   name: str = None
   is_private: bool = True
+  # The lists field is not always present. For example when reading from API
+  # data it is not easy to determine the sublists.
   lists: list = None # list[str]
 
   def ToDict(self):
@@ -98,7 +100,7 @@ class MetaList:
     return {
       'name': self.name,
       'is_private': self.is_private,
-      'lists': self.lists,
+      'lists': self.lists or [],
     }
 
   @staticmethod
@@ -110,6 +112,14 @@ class MetaList:
     return MetaList(name=d['name'],
                     is_private=d['is_private'],
                     lists=d['lists'])
+
+  @staticmethod
+  def FromPythonTwitter(tlist):
+    # Leave lists None to signify it's unclear what sublists are present from
+    # the API data.
+    return MetaList(name=tlist.name,
+                    is_private=(tlist.mode == 'private'),
+                    lists=None)
 
   @staticmethod
   def IsMetaList(name):
@@ -126,11 +136,13 @@ class TwitterAccount:
   '''
   follows: list = None # list[TwitterUser] 
   lists: list = None # list[TwitterList]
+  meta_lists: list = None # list[MetaList]
 
   def ToDict(self):
     return {
       'follows': [follow.ToDict() for follow in self.follows],
       'lists': [l.ToDict() for l in self.lists],
+      'meta_lists': [ml.ToDict() for ml in self.meta_lists],
     }
 
   def WriteToConfig(self, config_file):
@@ -142,7 +154,9 @@ class TwitterAccount:
     return TwitterAccount(follows=[TwitterUser.FromDict(follow)
                                    for follow in d.get('follows', [])],
                           lists=[TwitterList.FromDict(l)
-                                 for l in d.get('lists', [])])
+                                 for l in d.get('lists', [])],
+                          meta_lists=[MetaList.FromDict(ml)
+                                      for ml in d.get('meta_lists', [])])
 
   @staticmethod
   def FromApi(api):
@@ -150,15 +164,16 @@ class TwitterAccount:
     # Follows
     account.follows = [TwitterUser.FromPythonTwitter(friend)
                        for friend in api.GetFriends()]
-    # Lists
+    # Lists and Meta-lists
     account.lists = []
+    account.meta_lists = []
     lists = api.GetLists()
     for l in lists:
       if MetaList.IsMetaList(l.name):
-        print('    Skipping import of meta-list: "{0}"'.format(l.name))
-        continue
-      members = api.GetListMembers(list_id=l.id)
-      account.lists.append(TwitterList.FromPythonTwitter(l, members))
+        account.meta_lists.append(MetaList.FromPythonTwitter(l))
+      else:
+        members = api.GetListMembers(list_id=l.id)
+        account.lists.append(TwitterList.FromPythonTwitter(l, members))
     return account
 
   @staticmethod
@@ -179,7 +194,6 @@ class AccountMerger:
   def MergeAccounts(self, api_account, config_account, destructive=False):
     self._MergeFollows(api_account.follows, config_account.follows, destructive)
     self._MergeLists(api_account.lists, config_account.lists, destructive)
-    return TwitterAccount.FromApi(api)
 
   def _MergeFollows(self, api_follows, config_follows, destructive):
     api_set = {follow.username for follow in api_follows}
@@ -302,11 +316,7 @@ if __name__ == '__main__':
     api_account = TwitterAccount.FromApi(api)
     print('Merging account data: destructive? {0}'.format(args.destructive_upload))
     account_merger = AccountMerger(api)
-    merged_account = account_merger.MergeAccounts(
+    account_merger.MergeAccounts(
         api_account, config_account, destructive=args.destructive_upload)
-    if input('Write merged data back to config?'
-             ' This will overwrite any local changes y/n: ') == 'y':
-      merged_account.WriteToConfig(args.config_file)
-      print('Merged account data written to config file.')
   else:
     raise ValueError('Unsupported operation: {0}'.format(args.operation))
