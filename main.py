@@ -253,7 +253,8 @@ if __name__ == '__main__':
     account_merger = AccountMerger(api)
     merged_account = account_merger.MergeAccounts(
         api_account, config_account, destructive=args.destructive_upload)
-    if input('Write merged data back to config? y/n: ') == 'y':
+    if input('Write merged data back to config?'
+             ' This will overwrite any local changes y/n: ') == 'y':
       merged_account.WriteToConfig(args.config_file)
       print('Merged account data written to config file.')
   else:
