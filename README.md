@@ -64,14 +64,12 @@ python3 main.py --destructive_upload=True upload twitter.yaml
 
 ## Caveats
 
-This script has limited functionality. It supports:
+The following are the primary caveats one should think about before using this
+script:
 
-*   maintaining the list of users your account follows
-*   maintaining your Twitter lists (name, private/public, members)
-
-It does not support blocks, mutes, bookmarks, likes, tweets, etc.
-Some merge logic is also quirky, for example, renaming a list will cause the
-old list to be deleted and a new list to be created.
+*   limited field support (e.g. blocks, list descriptions not yet supported)
+*   quirky handling of list name change logic (e.g. old list deleted, new list created)
+*   does not gracefully handle @username changes
 
 ## New Features
 

@@ -12,16 +12,12 @@ class TwitterUser:
   '''Class representing a Twitter user.
   
   This is the primary object that is part of follow/block/list collections.
-
-  Upsync to Twitter:
-  - Only username is required.
   '''
-  id: int = None
+  id: int = None # Optional, may not be present.
   username: str = None
 
   def ToDict(self):
     return {
-      'id': self.id,
       'username': self.username,
     }
 
@@ -36,19 +32,14 @@ class TwitterUser:
 
 @dataclasses.dataclass
 class TwitterList:
-  '''Class representing a Twitter list.
-
-  Upsync to Twitter:
-  - Only name and members are required.
-  '''
-  id: int = None
+  '''Class representing a Twitter list.'''
+  id: int = None # Optional, may not be present.
   name: str = None
   is_private: bool = True
   members: list = None # list[TwitterUser]
 
   def ToDict(self):
     return {
-      'id': self.id,
       'name': self.name,
       'is_private': self.is_private,
       'members': [member.ToDict() for member in self.members],
