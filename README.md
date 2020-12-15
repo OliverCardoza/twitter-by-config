@@ -70,3 +70,48 @@ This script has limited functionality. It supports:
 *   maintaining your Twitter lists (name, private/public, members)
 
 It does not support blocks, mutes, bookmarks, likes, tweets, etc.
+Some merge logic is also quirky, for example, renaming a list will cause the
+old list to be deleted and a new list to be created.
+
+## New Features
+
+### Meta-lists
+
+WARNING: Work in progress
+
+A meta-list is a dynamic list composed of other lists. One use case might be if
+you would like a catch-all "Gaming" list to be composed of everyone on your
+"Starcraft" and "R6 Siege" lists. It would be tedious to have to add a new
+follow, for example @SC2ByuN to both "Starcraft" and "Gaming" lists. Instead
+this can be accomplished using a meta-list definition:
+
+```
+lists:
+- name: Starcraft
+  is_private: true
+  members:
+  - username: ENCE_Serral
+  - username: LowkoTV
+  - username: SC2ByuN
+- name: R6 Siege
+  is_private: true
+  members:
+  - username: MacieJayGaming
+  - username: DARUSSIANBADGER
+meta_lists:
+- name: "META: Gaming"
+  is_private: true
+  lists:
+  - Starcraft
+  - R6 Siege
+```
+
+There are a number of ways I could have implemented nested lists. I chose the
+current way for simplicity and ease of implementation.
+
+Requirements:
+
+* meta-list name must start with "META"
+* meta-list can only include other lists, no direct members
+* meta-lists are ignored during "download" operation
+

@@ -4,6 +4,9 @@ import twitter
 import yaml
 
 
+META_LIST_PREFIX = 'META'
+
+
 @dataclasses.dataclass
 class TwitterUser:
   '''Class representing a Twitter user.
@@ -53,6 +56,10 @@ class TwitterList:
 
   @staticmethod
   def FromDict(d):
+    if MetaList.IsMetaList(d['name']):
+      raise ValueError(
+          'Invalid list ({0}) conflicts with meta-list requirements'.format(
+              d['name']))
     return TwitterList(id=d.get('id', None),
                        name=d['name'],
                        is_private=d.get('is_private', True),
@@ -61,11 +68,52 @@ class TwitterList:
 
   @staticmethod
   def FromPythonTwitter(tlist, members):
+    if MetaList.IsMetaList(tlist.name):
+      raise ValueError(
+          'Invalid list ({0}) conflicts with meta-list requirements'.format(
+              tlist.name))
     return TwitterList(id=tlist.id,
                        name=tlist.name,
                        is_private=(tlist.mode == 'private'),
                        members=[TwitterUser.FromPythonTwitter(member)
                                 for member in members])
+
+
+@dataclasses.dataclass
+class MetaList:
+  '''Class representing a meta-list aka. list of lists.
+
+  This is a new feature not available in Twitter and implemented by the
+  twitter-by-config script. For more info see README.md.
+  '''
+  name: str = None
+  is_private: bool = True
+  lists: list = None # list[str]
+
+  def ToDict(self):
+    if not MetaList.IsMetaList(self.name):
+      raise ValueError(
+          'Invalid meta-list name ({0}), must start with: {1}'.format(
+              self.name, META_LIST_PREFIX))
+    return {
+      'name': self.name,
+      'is_private': self.is_private,
+      'lists': self.lists,
+    }
+
+  @staticmethod
+  def FromDict(d):
+    if not MetaList.IsMetaList(d['name']):
+      raise ValueError(
+          'Invalid meta-list name ({0}), must start with: {1}'.format(
+              d['name'], META_LIST_PREFIX))
+    return MetaList(name=d['name'],
+                    is_private=d['is_private'],
+                    lists=d['lists'])
+
+  @staticmethod
+  def IsMetaList(name):
+    return name.startswith(META_LIST_PREFIX)
 
 
 @dataclasses.dataclass
@@ -106,6 +154,9 @@ class TwitterAccount:
     account.lists = []
     lists = api.GetLists()
     for l in lists:
+      if MetaList.IsMetaList(l.name):
+        print('    Skipping import of meta-list: "{0}"'.format(l.name))
+        continue
       members = api.GetListMembers(list_id=l.id)
       account.lists.append(TwitterList.FromPythonTwitter(l, members))
     return account
