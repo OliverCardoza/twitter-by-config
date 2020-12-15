@@ -79,19 +79,22 @@ class MetaList:
   '''
   name: str = None
   is_private: bool = True
-  # The lists field is not always present. For example when reading from API
-  # data it is not easy to determine the sublists.
+  # Only present when read from config.
   lists: list = None # list[str]
+  # Only present when read from API.
+  api_list_id: int = None
 
   def ToDict(self):
     if not MetaList.IsMetaList(self.name):
       raise ValueError(
           'Invalid meta-list name ({0}), must start with: {1}'.format(
               self.name, META_LIST_PREFIX))
+    if not self.lists:
+      raise ValueError('Exporting MetaList ToDict without any lists set.')
     return {
       'name': self.name,
       'is_private': self.is_private,
-      'lists': self.lists or [],
+      'lists': self.lists,
     }
 
   @staticmethod
@@ -100,6 +103,8 @@ class MetaList:
       raise ValueError(
           'Invalid meta-list name ({0}), must start with: {1}'.format(
               d['name'], META_LIST_PREFIX))
+    if not d['lists']:
+      raise ValueError('Importing MetaList FromDict without any lists set.')
     return MetaList(name=d['name'],
                     is_private=d['is_private'],
                     lists=d['lists'])
@@ -110,7 +115,7 @@ class MetaList:
     # the API data.
     return MetaList(name=tlist.name,
                     is_private=(tlist.mode == 'private'),
-                    lists=None)
+                    api_list_id=tlist.id)
 
   @staticmethod
   def IsMetaList(name):
@@ -185,6 +190,9 @@ class AccountMerger:
   def MergeAccounts(self, api_account, config_account, destructive=False):
     self._MergeFollows(api_account.follows, config_account.follows, destructive)
     self._MergeLists(api_account.lists, config_account.lists, destructive)
+    self._MergeMetaLists(api_account.meta_lists,
+                         config_account.meta_lists,
+                         destructive)
 
   def _MergeFollows(self, api_follows, config_follows, destructive):
     api_set = {follow.username for follow in api_follows}
@@ -227,6 +235,7 @@ class AccountMerger:
           print('    Removing list: {0}'.format(list_to_remove))
           api_list = next(l for l in api_lists if l.name == list_to_remove)
           api.DestroyList(list_id=api_list.id)
+    # TODO: list.is_private merge
     for api_list in api_lists:
       if api_list.name in config_set:
         canonical_lists[api_list.name] = api_list
@@ -260,6 +269,10 @@ class AccountMerger:
         print('   Removing member from "{0}": @{1}'.format(config_list.name,
                                                            member))
         api.DestroyListsMember(list_id=api_list.id, screen_name=member)
+
+  def _MergeMetaLists(self, api_ml, config_ml, destructive):
+    # TODO: Can likely re-use a lot of logic from _MergeLists and _MergeList.
+    return None
 
 
 def CreateApi():
