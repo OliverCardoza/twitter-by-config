@@ -21,6 +21,12 @@ class TwitterUser:
       'username': self.username,
     }
 
+  def __eq__(self, other):
+    return other and self.username == other.username
+
+  def __hash__(self):
+    return hash(self.username)
+
   @staticmethod
   def FromDict(d):
     return TwitterUser(id=d.get('id', None), username=d['username'])
@@ -59,10 +65,8 @@ class TwitterList:
 
   @staticmethod
   def FromPythonTwitter(tlist, members):
-    if MetaList.IsMetaList(tlist.name):
-      raise ValueError(
-          'Invalid list ({0}) conflicts with meta-list requirements'.format(
-              tlist.name))
+    # Do not guard against creating TwitterList for MetaList because
+    # this class can hold the denormalized MetaList data from Twitter API.
     return TwitterList(id=tlist.id,
                        name=tlist.name,
                        is_private=(tlist.mode == 'private'),
@@ -82,7 +86,7 @@ class MetaList:
   # Only present when read from config.
   lists: list = None # list[str]
   # Only present when read from API.
-  api_list_id: int = None
+  twitter_list: TwitterList = None
 
   def ToDict(self):
     if not MetaList.IsMetaList(self.name):
@@ -97,6 +101,18 @@ class MetaList:
       'lists': self.lists,
     }
 
+  def ToTwitterList(self, canonical_lists):
+    '''Denormalizes a MetaList into a TwitterList given the canonical TwitterLists.'''
+    if self.twitter_list:
+      return self.twitter_list
+    members = set()
+    for canonical_list in canonical_lists:
+      if canonical_list.name in self.lists:
+        members.update(canonical_list.members)
+    return TwitterList(name=self.name,
+                       is_private=self.is_private,
+                       members=list(members))
+
   @staticmethod
   def FromDict(d):
     if not MetaList.IsMetaList(d['name']):
@@ -110,12 +126,10 @@ class MetaList:
                     lists=d['lists'])
 
   @staticmethod
-  def FromPythonTwitter(tlist):
-    # Leave lists None to signify it's unclear what sublists are present from
-    # the API data.
-    return MetaList(name=tlist.name,
-                    is_private=(tlist.mode == 'private'),
-                    api_list_id=tlist.id)
+  def FromTwitterList(twitter_list):
+    return MetaList(name=twitter_list.name,
+                    is_private=twitter_list.is_private,
+                    twitter_list=twitter_list)
 
   @staticmethod
   def IsMetaList(name):
@@ -165,11 +179,12 @@ class TwitterAccount:
     account.meta_lists = []
     lists = api.GetLists()
     for l in lists:
+      members = api.GetListMembers(list_id=l.id)
+      twitter_list = TwitterList.FromPythonTwitter(l, members)
       if MetaList.IsMetaList(l.name):
-        account.meta_lists.append(MetaList.FromPythonTwitter(l))
+        account.meta_lists.append(MetaList.FromTwitterList(twitter_list))
       else:
-        members = api.GetListMembers(list_id=l.id)
-        account.lists.append(TwitterList.FromPythonTwitter(l, members))
+        account.lists.append(twitter_list)
     return account
 
   @staticmethod
@@ -189,9 +204,12 @@ class AccountMerger:
 
   def MergeAccounts(self, api_account, config_account, destructive=False):
     self._MergeFollows(api_account.follows, config_account.follows, destructive)
-    self._MergeLists(api_account.lists, config_account.lists, destructive)
+    canonical_lists = self._MergeLists(api_account.lists,
+                                       config_account.lists,
+                                       destructive)
     self._MergeMetaLists(api_account.meta_lists,
                          config_account.meta_lists,
+                         canonical_lists,
                          destructive)
 
   def _MergeFollows(self, api_follows, config_follows, destructive):
@@ -237,12 +255,14 @@ class AccountMerger:
           api.DestroyList(list_id=api_list.id)
     # TODO: list.is_private merge
     for api_list in api_lists:
-      if api_list.name in config_set:
+      if not destructive or api_list.name in config_set:
         canonical_lists[api_list.name] = api_list
     for config_list in config_lists:
-      self._MergeList(canonical_lists[config_list.name],
-                      config_list,
-                      destructive)
+      canonical_lists[config_list.name].members = (
+          self._MergeList(canonical_lists[config_list.name],
+                          config_list,
+                          destructive))
+    return canonical_lists.values()
 
   def _MergeList(self, api_list, config_list, destructive):
     api_members = {user.username for user in api_list.members}
@@ -254,25 +274,36 @@ class AccountMerger:
            ' members removed.').format(config_list.name,
                                        len(members_to_add),
                                        len(members_to_remove)))
+    canonical_members = {}
+    for api_member in api_list.members:
+      if not destructive or api_member.username in config_members:
+        canonical_members[api_member.username] = api_member
     if not members_to_add and not members_to_remove:
       # No changes will occurso skip confirmation.
-      return
+      return canonical_members.values()
     if input('    Proceed? y/n: ') == 'y':
       for member in members_to_add:
         print('   Adding member to "{0}": @{1}'.format(config_list.name,
                                                        member))
         try:
           api.CreateListsMember(list_id=api_list.id, screen_name=member)
+          canonical_members[member] = TwitterUser(username=member)
         except twitter.TwitterError as e:
           print('   Error add list member @{0}: {1}'.format(member, e))
       for member in members_to_remove:
         print('   Removing member from "{0}": @{1}'.format(config_list.name,
                                                            member))
         api.DestroyListsMember(list_id=api_list.id, screen_name=member)
+    return canonical_members.values()
 
-  def _MergeMetaLists(self, api_ml, config_ml, destructive):
-    # TODO: Can likely re-use a lot of logic from _MergeLists and _MergeList.
-    return None
+  def _MergeMetaLists(self, api_ml, config_ml, canonical_lists, destructive):
+    # Step 1: Hydrate each MetaList into a corresponding TwitterList.
+    api_lists = [meta_list.ToTwitterList(canonical_lists)
+                 for meta_list in api_ml]
+    config_lists = [meta_list.ToTwitterList(canonical_lists)
+                    for meta_list in config_ml]
+    # Step 2: Perform equivalent list merging as done with non-meta lists.
+    self._MergeLists(api_lists, config_lists, destructive)
 
 
 def CreateApi():

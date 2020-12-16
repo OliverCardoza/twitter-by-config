@@ -75,8 +75,6 @@ script:
 
 ### Meta-lists
 
-WARNING: Work in progress
-
 A meta-list is a dynamic list composed of other lists. One use case might be if
 you would like a catch-all "Gaming" list to be composed of everyone on your
 "Starcraft" and "R6 Siege" lists. It would be tedious to have to add a new
