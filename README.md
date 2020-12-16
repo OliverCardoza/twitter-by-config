@@ -53,15 +53,6 @@ proposed changes and ask for confirmation [y/n] before proceeding.
 python3 main.py upload twitter.yaml
 ```
 
-By default this will only make constructive operations (add follows, add lists,
-add list members). To enable it to make destructive operations (unfollow,
-delete lists, delete list members) you must enable the `--destructive_upload`
-flag:
-
-```
-python3 main.py --destructive_upload=True upload twitter.yaml 
-```
-
 ## Caveats
 
 The following are the primary caveats one should think about before using this
@@ -70,6 +61,7 @@ script:
 *   limited field support (e.g. blocks, list descriptions not yet supported)
 *   quirky handling of list name change logic (e.g. old list deleted, new list created)
 *   does not gracefully handle @username changes
+*   updating list privacy isn't yet supported (e.g. public <-> private)
 
 ## New Features
 

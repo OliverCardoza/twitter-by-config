@@ -203,86 +203,83 @@ class AccountMerger:
   def __init__(self, api):
     self.api = api
 
-  def MergeAccounts(self, api_account, config_account, destructive=False):
-    self._MergeFollows(api_account.follows, config_account.follows, destructive)
+  def MergeAccounts(self, api_account, config_account):
+    self._MergeFollows(api_account.follows, config_account.follows)
     canonical_lists = self._MergeLists(api_account.lists,
-                                       config_account.lists,
-                                       destructive)
+                                       config_account.lists)
     self._MergeMetaLists(api_account.meta_lists,
                          config_account.meta_lists,
-                         canonical_lists,
-                         destructive)
+                         canonical_lists)
 
-  def _MergeFollows(self, api_follows, config_follows, destructive):
+  def _MergeFollows(self, api_follows, config_follows):
+    # Step 1: Compute follow sets.
     api_set = {follow.username for follow in api_follows}
     config_set = {follow.username for follow in config_follows}
+    # Step 2: Add missing follows.
     follows_to_add = config_set.difference(api_set)
-    follows_to_remove = api_set.difference(config_set) if destructive else {}
-    print('Merging will result in {0} follows added and {1} follows removed.'.format(
-        len(follows_to_add), len(follows_to_remove)))
-    if not follows_to_add and not follows_to_remove:
-      # No changes will occur so skip confirmation.
-      return
-    if input('    Proceed? y/n: ') == 'y':
+    print('Merging follows will result in {0} follows added'.format(
+        len(follows_to_add)))
+    if follows_to_add and input('    Proceed? y/n: ') == 'y':
       for follow in follows_to_add:
         print('    Following: @{0}'.format(follow))
         try:
           api.CreateFriendship(screen_name=follow)
         except twitter.TwitterError as e:
           print('   Error adding @{0}: {1}'.format(follow, e))
+    # Step 3: Removing unnecessary follows.
+    follows_to_remove = api_set.difference(config_set)
+    print('Merging follows will result in {0} follows removed'.format(
+        len(follows_to_remove)))
+    if follows_to_remove and input('    Proceed? y/n: ') == 'y':
       for follow in follows_to_remove:
         print('    Unfollowing: @{0}'.format(follow))
         api.DestroyFriendship(screen_name=follow)
 
-  def _MergeLists(self, api_lists, config_lists, destructive):
+  def _MergeLists(self, api_lists, config_lists):
+    # Step 1: Compute list sets.
     api_set = {l.name for l in api_lists}
     config_set = {l.name for l in config_lists}
+    canonical_lists = {l.name:l for l in api_lists}
+    # Step 2: Create missing lists.
     lists_to_add = config_set.difference(api_set)
-    lists_to_remove = api_set.difference(config_set) if destructive else {}
-    print('Merging will result in {0} lists added and {1} lists deleted.'.format(
-        len(lists_to_add), len(lists_to_remove)))
-    canonical_lists = {}
-    if lists_to_add or lists_to_remove:
-      if input('    Proceed? y/n: ') == 'y':
-        for list_to_add in lists_to_add:
-          print('    Adding list: {0}'.format(list_to_add))
-          config_list = next(l for l in config_lists if l.name == list_to_add)
-          mode = 'private' if config_list.is_private else 'public'
-          new_list = api.CreateList(config_list.name, mode=mode)
-          canonical_lists[new_list.name] = TwitterList.FromPythonTwitter(new_list, [])
-        for list_to_remove in lists_to_remove:
-          print('    Removing list: {0}'.format(list_to_remove))
-          api_list = next(l for l in api_lists if l.name == list_to_remove)
-          api.DestroyList(list_id=api_list.id)
+    print('Merging lists will result in {0} lists created'.format(
+        len(lists_to_add)))
+    if lists_to_add and input('    Proceed? y/n: ') == 'y':
+      for list_to_add in lists_to_add:
+        print('    Adding list: {0}'.format(list_to_add))
+        config_list = next(l for l in config_lists if l.name == list_to_add)
+        mode = 'private' if config_list.is_private else 'public'
+        new_list = api.CreateList(config_list.name, mode=mode)
+        canonical_lists[new_list.name] = TwitterList.FromPythonTwitter(new_list, [])
+    # Step 3: Remove unnecessary ilsts.
+    lists_to_remove = api_set.difference(config_set)
+    print('Merging lists will result in {0} lists deleted'.format(
+        len(lists_to_remove)))
+    if lists_to_remove and input('    Proceed? y/n: ') == 'y':
+      for list_to_remove in lists_to_remove:
+        print('    Removing list: {0}'.format(list_to_remove))
+        api_list = next(l for l in api_lists if l.name == list_to_remove)
+        api.DestroyList(list_id=api_list.id)
+        del canonical_lists[api_list.name]
+    # Step 4: Update list privacy.
     # TODO: list.is_private merge
-    for api_list in api_lists:
-      if not destructive or api_list.name in config_set:
-        canonical_lists[api_list.name] = api_list
+    # Step 5: Update members for each list.
     for config_list in config_lists:
-      canonical_lists[config_list.name].members = (
-          self._MergeList(canonical_lists[config_list.name],
-                          config_list,
-                          destructive))
+      new_members = self._MergeList(canonical_lists[config_list.name],
+                                    config_list)
+      canonical_lists[config_list.name].members = new_members
     return canonical_lists.values()
 
-  def _MergeList(self, api_list, config_list, destructive):
+  def _MergeList(self, api_list, config_list):
+    # Step 1: Compute member sets.
     api_members = {user.username for user in api_list.members}
     config_members = {user.username for user in config_list.members}
+    canonical_members = {user.username:user for user in api_list.members}
+    # Step 2: Add missing members.
     members_to_add = config_members.difference(api_members)
-    members_to_remove = (api_members.difference(config_members)
-                         if destructive else {})
-    print(('Merging list "{0}" will result in {1} members added and {2}'
-           ' members removed.').format(config_list.name,
-                                       len(members_to_add),
-                                       len(members_to_remove)))
-    canonical_members = {}
-    for api_member in api_list.members:
-      if not destructive or api_member.username in config_members:
-        canonical_members[api_member.username] = api_member
-    if not members_to_add and not members_to_remove:
-      # No changes will occurso skip confirmation.
-      return canonical_members.values()
-    if input('    Proceed? y/n: ') == 'y':
+    print('Merging list "{0}" will result in {1} members added'.format(
+        config_list.name, len(members_to_add)))
+    if members_to_add and input('    Proceed? y/n: ') == 'y':
       for member in members_to_add:
         print('   Adding member to "{0}": @{1}'.format(config_list.name,
                                                        member))
@@ -291,20 +288,26 @@ class AccountMerger:
           canonical_members[member] = TwitterUser(username=member)
         except twitter.TwitterError as e:
           print('   Error add list member @{0}: {1}'.format(member, e))
+    # Step 3: Remove unnecessary members.
+    members_to_remove = api_members.difference(config_members)
+    print('Merging list "{0}" will result in {1} members removed'.format(
+        config_list.name, len(members_to_remove)))
+    if members_to_remove and input('    Proceed? y/n: ') == 'y':
       for member in members_to_remove:
         print('   Removing member from "{0}": @{1}'.format(config_list.name,
                                                            member))
         api.DestroyListsMember(list_id=api_list.id, screen_name=member)
+        del canonical_members[member]
     return canonical_members.values()
 
-  def _MergeMetaLists(self, api_ml, config_ml, canonical_lists, destructive):
+  def _MergeMetaLists(self, api_ml, config_ml, canonical_lists):
     # Step 1: Hydrate each MetaList into a corresponding TwitterList.
     api_lists = [meta_list.ToTwitterList(canonical_lists)
                  for meta_list in api_ml]
     config_lists = [meta_list.ToTwitterList(canonical_lists)
                     for meta_list in config_ml]
     # Step 2: Perform equivalent list merging as done with non-meta lists.
-    self._MergeLists(api_lists, config_lists, destructive)
+    self._MergeLists(api_lists, config_lists)
 
 
 def CreateApi():
@@ -329,11 +332,6 @@ parser.add_argument('operation', type=str, choices=['download', 'upload'],
                           '    upload: updates account data in Twitter to'
                           ' match your config file\n'))
 parser.add_argument('config_file', type=str, help='The address of your config file.')
-parser.add_argument('--destructive_upload', type=bool, default=False,
-                    help=('When true, upload operation will delete data present'
-                          ' in the account from TwitterAPI not present in the'
-                          ' config file. This ensures exact consistency between'
-                          ' the config file and the account state in Twitter.'))
 
 
 if __name__ == '__main__':
@@ -350,9 +348,7 @@ if __name__ == '__main__':
     config_account = TwitterAccount.ReadFromConfig(args.config_file)
     print('Reading account data from Twitter API...')
     api_account = TwitterAccount.FromApi(api)
-    print('Merging account data: destructive? {0}'.format(args.destructive_upload))
     account_merger = AccountMerger(api)
-    account_merger.MergeAccounts(
-        api_account, config_account, destructive=args.destructive_upload)
+    account_merger.MergeAccounts(api_account, config_account)
   else:
     raise ValueError('Unsupported operation: {0}'.format(args.operation))
