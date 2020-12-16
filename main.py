@@ -16,7 +16,7 @@ class TwitterUser:
   id: int = None # Optional, may not be present.
   username: str = None
 
-  def ToDict(self):
+  def ToConfigDict(self):
     return {
       'username': self.username,
     }
@@ -28,7 +28,7 @@ class TwitterUser:
     return hash(self.username)
 
   @staticmethod
-  def FromDict(d):
+  def FromConfigDict(d):
     return TwitterUser(id=d.get('id', None), username=d['username'])
 
   @staticmethod
@@ -44,15 +44,15 @@ class TwitterList:
   is_private: bool = True
   members: list = None # list[TwitterUser]
 
-  def ToDict(self):
+  def ToConfigDict(self):
     return {
       'name': self.name,
       'is_private': self.is_private,
-      'members': [member.ToDict() for member in self.members],
+      'members': [member.ToConfigDict() for member in self.members],
     }
 
   @staticmethod
-  def FromDict(d):
+  def FromConfigDict(d):
     if MetaList.IsMetaList(d['name']):
       raise ValueError(
           'Invalid list ({0}) conflicts with meta-list requirements'.format(
@@ -60,7 +60,7 @@ class TwitterList:
     return TwitterList(id=d.get('id', None),
                        name=d['name'],
                        is_private=d.get('is_private', True),
-                       members=[TwitterUser.FromDict(member)
+                       members=[TwitterUser.FromConfigDict(member)
                                 for member in d['members']])
 
   @staticmethod
@@ -88,13 +88,13 @@ class MetaList:
   # Only present when read from API.
   twitter_list: TwitterList = None
 
-  def ToDict(self):
+  def ToConfigDict(self):
     if not MetaList.IsMetaList(self.name):
       raise ValueError(
           'Invalid meta-list name ({0}), must start with: {1}'.format(
               self.name, META_LIST_PREFIX))
     if not self.lists:
-      raise ValueError('Exporting MetaList ToDict without any lists set.')
+      raise ValueError('Exporting MetaList ToConfigDict without any lists set.')
     return {
       'name': self.name,
       'is_private': self.is_private,
@@ -114,13 +114,14 @@ class MetaList:
                        members=list(members))
 
   @staticmethod
-  def FromDict(d):
+  def FromConfigDict(d):
     if not MetaList.IsMetaList(d['name']):
       raise ValueError(
           'Invalid meta-list name ({0}), must start with: {1}'.format(
               d['name'], META_LIST_PREFIX))
     if not d['lists']:
-      raise ValueError('Importing MetaList FromDict without any lists set.')
+      raise ValueError(
+          'Importing MetaList FromConfigDict without any lists set.')
     return MetaList(name=d['name'],
                     is_private=d['is_private'],
                     lists=d['lists'])
@@ -148,24 +149,24 @@ class TwitterAccount:
   lists: list = None # list[TwitterList]
   meta_lists: list = None # list[MetaList]
 
-  def ToDict(self):
+  def ToConfigDict(self):
     return {
-      'follows': [follow.ToDict() for follow in self.follows],
-      'lists': [l.ToDict() for l in self.lists],
-      'meta_lists': [ml.ToDict() for ml in self.meta_lists],
+      'follows': [follow.ToConfigDict() for follow in self.follows],
+      'lists': [l.ToConfigDict() for l in self.lists],
+      'meta_lists': [ml.ToConfigDict() for ml in self.meta_lists],
     }
 
   def WriteToConfig(self, config_file):
     with open(config_file, 'w') as stream:
-      yaml.dump(self.ToDict(), stream)
+      yaml.dump(self.ToConfigDict(), stream)
 
   @staticmethod
-  def FromDict(d):
-    return TwitterAccount(follows=[TwitterUser.FromDict(follow)
+  def FromConfigDict(d):
+    return TwitterAccount(follows=[TwitterUser.FromConfigDict(follow)
                                    for follow in d.get('follows', [])],
-                          lists=[TwitterList.FromDict(l)
+                          lists=[TwitterList.FromConfigDict(l)
                                  for l in d.get('lists', [])],
-                          meta_lists=[MetaList.FromDict(ml)
+                          meta_lists=[MetaList.FromConfigDict(ml)
                                       for ml in d.get('meta_lists', [])])
 
   @staticmethod
@@ -191,7 +192,7 @@ class TwitterAccount:
   def ReadFromConfig(config_file):
     with open(config_file, 'r') as stream:
       try:
-        return TwitterAccount.FromDict(yaml.safe_load(stream))
+        return TwitterAccount.FromConfigDict(yaml.safe_load(stream))
       except yaml.YAMLError as e:
         print('Error reading account data from {0}: {1}'.format(config_file,
                                                                 e))
