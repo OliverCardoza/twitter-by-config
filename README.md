@@ -103,3 +103,10 @@ Requirements:
 * meta-list can only include other lists, no direct members
 * meta-lists are ignored during "download" operation
 
+## Tests
+
+To run tests:
+
+```
+python3 -m unittest
+```
