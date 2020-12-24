@@ -65,33 +65,51 @@ class AccountMerger:
     canonical_lists = {l.name:l for l in api_lists}
     # Step 2: Create missing lists.
     lists_to_add = config_set.difference(api_set)
-    print('Merging lists will result in {0} lists created'.format(
-        len(lists_to_add)))
-    if lists_to_add and input('    Proceed? y/n: ') == 'y':
-      for list_to_add in lists_to_add:
-        print('    Adding list: {0}'.format(list_to_add))
-        config_list = next(l for l in config_lists if l.name == list_to_add)
-        mode = 'private' if config_list.is_private else 'public'
-        new_list = api.CreateList(config_list.name, mode=mode)
-        canonical_lists[new_list.name] = TwitterList.FromPythonTwitter(new_list, [])
+    new_lists = self._PromptThenMaybeExecute(
+        items=lists_to_add,
+        summary='Merging lists will result in {0} lists created'.format(
+            len(lists_to_add)),
+        per_item_desc=lambda item: '    Create list: {0}'.format(item),
+        per_item_executor=lambda item: self._AddList(item, config_lists))
+    for new_list in new_lists:
+      canonical_lists[new_list.name] = new_list 
     # Step 3: Remove unnecessary ilsts.
     lists_to_remove = api_set.difference(config_set)
-    print('Merging lists will result in {0} lists deleted'.format(
-        len(lists_to_remove)))
-    if lists_to_remove and input('    Proceed? y/n: ') == 'y':
-      for list_to_remove in lists_to_remove:
-        print('    Removing list: {0}'.format(list_to_remove))
-        api_list = next(l for l in api_lists if l.name == list_to_remove)
-        api.DestroyList(list_id=api_list.id)
-        del canonical_lists[api_list.name]
+    removed_lists = self._PromptThenMaybeExecute(
+        items=lists_to_remove,
+        summary='Merging lists will result in {0} lists deleted'.format(
+            len(lists_to_remove)),
+        per_item_desc=lambda item: '    Delete list: {0}'.format(item),
+        per_item_executor=lambda item: self._DeleteList(item, api_lists))
+    for removed_list in removed_lists:
+      del canonical_lists[removed_list.name]
     # Step 4: Update list privacy.
     # TODO: list.is_private merge
-    # Step 5: Update members for each list.
-    for config_list in config_lists:
-      new_members = self._MergeList(canonical_lists[config_list.name],
-                                    config_list)
-      canonical_lists[config_list.name].members = new_members
+    # Step 5: Update members for each canonical list.
+    for canonical_list in canonical_lists.values():
+      config_list = next((l for l in config_lists
+                          if l.name == canonical_list.name),
+                         None)
+      if config_list:
+        # Reaching here means that a canonical list (exists in Twitter)
+        # has a matching config entry and to perform member merging.
+        # Not all config_lists will be merged if it was not created early
+        # (maybe via negative prompt answer).
+        new_members = self._MergeList(canonical_list,
+                                      config_list)
+        canonical_lists[config_list.name].members = new_members
     return canonical_lists.values()
+
+  def _AddList(self, list_name, config_lists):
+    config_list = next(l for l in config_lists if l.name == list_name)
+    mode = 'private' if config_list.is_private else 'public'
+    new_list = self.api.CreateList(config_list.name, mode=mode)
+    return TwitterList.FromPythonTwitter(new_list, [])
+
+  def _DeleteList(self, list_name, api_lists):
+    api_list = next(l for l in api_lists if l.name == list_name)
+    self.api.DestroyList(list_id=api_list.id)
+    return api_list
 
   def _MergeList(self, api_list, config_list):
     # Step 1: Compute member sets.
@@ -107,7 +125,7 @@ class AccountMerger:
         print('   Adding member to "{0}": @{1}'.format(config_list.name,
                                                        member))
         try:
-          api.CreateListsMember(list_id=api_list.id, screen_name=member)
+          self.api.CreateListsMember(list_id=api_list.id, screen_name=member)
           canonical_members[member] = TwitterUser(username=member)
         except twitter.TwitterError as e:
           print('   Error add list member @{0}: {1}'.format(member, e))
@@ -149,6 +167,7 @@ class AccountMerger:
                               summary='',
                               per_item_desc=lambda item: item,
                               per_item_executor=lambda item: None):
+    results = []
     if items:
       print(summary)
       diff_action = self._DiffPrompt()
@@ -159,4 +178,5 @@ class AccountMerger:
           if (diff_action == DiffAction.ACCEPT_ALL or
               (diff_action == DiffAction.CONFIRM_EACH and
                input('      Confirm y/n: ') == 'y')):
-            per_item_executor(item)
+            results.append(per_item_executor(item))
+    return results
