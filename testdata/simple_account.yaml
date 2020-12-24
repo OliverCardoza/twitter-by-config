@@ -1,0 +1,20 @@
+follows:
+- username: nntaleb
+- username: ENCE_Serral
+lists:
+- name: Starcraft
+  is_private: True
+  members:
+  - username: ENCE_Serral
+  - username: ESLSC2
+- name: Philosophy
+  is_private: True
+  members:
+  - username: nntaleb
+  - username: Naval
+meta_lists:
+- name: 'META: All'
+  is_private: True
+  lists:
+  - Starcraft
+  - Philosophy
