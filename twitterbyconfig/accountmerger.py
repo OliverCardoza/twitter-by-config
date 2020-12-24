@@ -65,24 +65,24 @@ class AccountMerger:
     canonical_lists = {l.name:l for l in api_lists}
     # Step 2: Create missing lists.
     lists_to_add = config_set.difference(api_set)
-    new_lists = self._PromptThenMaybeExecute(
+    self._PromptThenMaybeExecute(
         items=lists_to_add,
         summary='Merging lists will result in {0} lists created'.format(
             len(lists_to_add)),
         per_item_desc=lambda item: '    Create list: {0}'.format(item),
-        per_item_executor=lambda item: self._AddList(item, config_lists))
-    for new_list in new_lists:
-      canonical_lists[new_list.name] = new_list
+        per_item_executor=lambda item: self._AddList(item,
+                                                     config_lists,
+                                                     canonical_lists))
     # Step 3: Remove unnecessary ilsts.
     lists_to_remove = api_set.difference(config_set)
-    removed_lists = self._PromptThenMaybeExecute(
+    self._PromptThenMaybeExecute(
         items=lists_to_remove,
         summary='Merging lists will result in {0} lists deleted'.format(
             len(lists_to_remove)),
         per_item_desc=lambda item: '    Delete list: {0}'.format(item),
-        per_item_executor=lambda item: self._DeleteList(item, api_lists))
-    for removed_list in removed_lists:
-      del canonical_lists[removed_list.name]
+        per_item_executor=lambda item: self._DeleteList(item,
+                                                        api_lists,
+                                                        canonical_lists))
     # Step 4: Update list privacy.
     # TODO: list.is_private merge
     # Step 5: Update members for each canonical list.
@@ -100,15 +100,17 @@ class AccountMerger:
         canonical_lists[config_list.name].members = new_members
     return canonical_lists.values()
 
-  def _AddList(self, list_name, config_lists):
+  def _AddList(self, list_name, config_lists, canonical_lists):
     config_list = next(l for l in config_lists if l.name == list_name)
     mode = 'private' if config_list.is_private else 'public'
     new_list = self.api.CreateList(config_list.name, mode=mode)
+    canonical_lists[new_list.name] = new_list
     return TwitterList.FromPythonTwitter(new_list, [])
 
-  def _DeleteList(self, list_name, api_lists):
+  def _DeleteList(self, list_name, api_lists, canonical_lists):
     api_list = next(l for l in api_lists if l.name == list_name)
     self.api.DestroyList(list_id=api_list.id)
+    del canonical_lists[api_list.name]
     return api_list
 
   def _MergeList(self, api_list, config_list):
