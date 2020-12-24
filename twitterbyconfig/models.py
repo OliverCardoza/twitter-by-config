@@ -91,8 +91,6 @@ class MetaList:
       raise ValueError(
           'Invalid meta-list name ({0}), must start with: {1}'.format(
               self.name, META_LIST_PREFIX))
-    if not self.lists:
-      raise ValueError('Exporting MetaList ToConfigDict without any lists set.')
     return {
       'name': self.name,
       'is_private': self.is_private,

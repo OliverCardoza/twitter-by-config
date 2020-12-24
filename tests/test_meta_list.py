@@ -29,13 +29,6 @@ class TestMetaList(unittest.TestCase):
     with self.assertRaises(ValueError) as e:
       ml.ToConfigDict()
 
-  def test_ToConfigDict_FailsWhenNoLists(self):
-    ml = tbc.MetaList(name='META: Politics',
-                      is_private=True,
-                      lists=[])
-    with self.assertRaises(ValueError) as e:
-      ml.ToConfigDict()
-
   def test_FromConfigDict(self):
     config_dict = {
       'name': 'META: Politics',
