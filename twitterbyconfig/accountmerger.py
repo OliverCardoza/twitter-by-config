@@ -1,3 +1,4 @@
+import enum
 import twitter
 
 from twitterbyconfig.models import (
@@ -6,6 +7,13 @@ from twitterbyconfig.models import (
     MetaList,
     TwitterAccount,
 )
+
+
+class DiffAction(enum.Enum):
+  UNKNOWN = 0
+  ACCEPT_ALL = 1
+  DO_NOTHING = 2
+  CONFIRM_EACH = 3
 
 
 class AccountMerger:
@@ -26,23 +34,29 @@ class AccountMerger:
     config_set = {follow.username for follow in config_follows}
     # Step 2: Add missing follows.
     follows_to_add = config_set.difference(api_set)
-    print('Merging follows will result in {0} follows added'.format(
-        len(follows_to_add)))
-    if follows_to_add and input('    Proceed? y/n: ') == 'y':
-      for follow in follows_to_add:
-        print('    Following: @{0}'.format(follow))
-        try:
-          api.CreateFriendship(screen_name=follow)
-        except twitter.TwitterError as e:
-          print('   Error adding @{0}: {1}'.format(follow, e))
+    self._PromptThenMaybeExecute(
+        items=follows_to_add,
+        summary='Merging follows will result in {0} follows added'.format(
+            len(follows_to_add)),
+        per_item_desc=lambda item: '    Follow: @{0}'.format(item),
+        per_item_executor=lambda item: self._AddFollow(item))
     # Step 3: Removing unnecessary follows.
     follows_to_remove = api_set.difference(config_set)
-    print('Merging follows will result in {0} follows removed'.format(
-        len(follows_to_remove)))
-    if follows_to_remove and input('    Proceed? y/n: ') == 'y':
-      for follow in follows_to_remove:
-        print('    Unfollowing: @{0}'.format(follow))
-        api.DestroyFriendship(screen_name=follow)
+    self._PromptThenMaybeExecute(
+        items=follows_to_remove,
+        summary='Merging follows will result in {0} follows removed'.format(
+            len(follows_to_remove)),
+        per_item_desc=lambda item: '    Unfollow: @{0}'.format(item),
+        per_item_executor=lambda item: self._Unfollow(item))
+
+  def _AddFollow(self, follow):
+    try:
+      self.api.CreateFriendship(screen_name=follow)
+    except twitter.TwitterError as e:
+      print('   Error adding @{0}: {1}'.format(follow, e))
+
+  def _Unfollow(self, follow):
+    self.api.DestroyFriendship(screen_name=follow)
 
   def _MergeLists(self, api_lists, config_lists):
     # Step 1: Compute list sets.
@@ -118,3 +132,31 @@ class AccountMerger:
     # Step 2: Perform equivalent list merging as done with non-meta lists.
     self._MergeLists(api_lists, config_lists)
 
+  def _DiffPrompt(self):
+    prompt = input(
+        '    Proceed? Accept all (a), Do nothing (n), Confirm each (c)? ')
+    if prompt == 'a':
+      return DiffAction.ACCEPT_ALL
+    elif prompt == 'n':
+      return DiffAction.DO_NOTHING
+    elif prompt == 'c':
+      return DiffAction.CONFIRM_EACH
+    else:
+      return DiffAction.UNKNOWN
+
+  def _PromptThenMaybeExecute(self,
+                              items=[],
+                              summary='',
+                              per_item_desc=lambda item: item,
+                              per_item_executor=lambda item: None):
+    if items:
+      print(summary)
+      diff_action = self._DiffPrompt()
+      if (diff_action == DiffAction.ACCEPT_ALL or
+          diff_action == DiffAction.CONFIRM_EACH):
+        for item in items:
+          print(per_item_desc(item))
+          if (diff_action == DiffAction.ACCEPT_ALL or
+              (diff_action == DiffAction.CONFIRM_EACH and
+               input('      Confirm y/n: ') == 'y')):
+            per_item_executor(item)
