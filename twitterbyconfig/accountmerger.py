@@ -72,7 +72,7 @@ class AccountMerger:
         per_item_desc=lambda item: '    Create list: {0}'.format(item),
         per_item_executor=lambda item: self._AddList(item, config_lists))
     for new_list in new_lists:
-      canonical_lists[new_list.name] = new_list 
+      canonical_lists[new_list.name] = new_list
     # Step 3: Remove unnecessary ilsts.
     lists_to_remove = api_set.difference(config_set)
     removed_lists = self._PromptThenMaybeExecute(
@@ -118,28 +118,38 @@ class AccountMerger:
     canonical_members = {user.username:user for user in api_list.members}
     # Step 2: Add missing members.
     members_to_add = config_members.difference(api_members)
-    print('Merging list "{0}" will result in {1} members added'.format(
-        config_list.name, len(members_to_add)))
-    if members_to_add and input('    Proceed? y/n: ') == 'y':
-      for member in members_to_add:
-        print('   Adding member to "{0}": @{1}'.format(config_list.name,
-                                                       member))
-        try:
-          self.api.CreateListsMember(list_id=api_list.id, screen_name=member)
-          canonical_members[member] = TwitterUser(username=member)
-        except twitter.TwitterError as e:
-          print('   Error add list member @{0}: {1}'.format(member, e))
+    self._PromptThenMaybeExecute(
+        items=members_to_add,
+        summary='Merging list "{0}" will result in {1} members added'.format(
+            config_list.name, len(members_to_add)),
+        per_item_desc=lambda item: '    Add @{0} to list "{1}"'.format(
+            item, config_list.name),
+        per_item_executor=lambda item: self._AddListMember(api_list,
+                                                           item,
+                                                           canonical_members))
     # Step 3: Remove unnecessary members.
     members_to_remove = api_members.difference(config_members)
-    print('Merging list "{0}" will result in {1} members removed'.format(
-        config_list.name, len(members_to_remove)))
-    if members_to_remove and input('    Proceed? y/n: ') == 'y':
-      for member in members_to_remove:
-        print('   Removing member from "{0}": @{1}'.format(config_list.name,
-                                                           member))
-        api.DestroyListsMember(list_id=api_list.id, screen_name=member)
-        del canonical_members[member]
+    self._PromptThenMaybeExecute(
+        items=members_to_remove,
+        summary='Merging list "{0}" will result in {1} members removed'.format(
+            config_list.name, len(members_to_remove)),
+        per_item_desc=lambda item: '    Remove @{0} from list "{1}"'.format(
+            item, config_list.name),
+        per_item_executor=lambda item: self._RemoveListMember(api_list,
+                                                              item,
+                                                              canonical_members))
     return canonical_members.values()
+
+  def _AddListMember(self, api_list, member, canonical_members):
+    try:
+      self.api.CreateListsMember(list_id=api_list.id, screen_name=member)
+      canonical_members[member] = TwitterUser(username=member)
+    except twitter.TwitterError as e:
+      print('   Error add list member @{0}: {1}'.format(member, e))
+
+  def _RemoveListMember(self, api_list, member, canonical_members):
+    self.api.DestroyListsMember(list_id=api_list.id, screen_name=member)
+    del canonical_members[member]
 
   def _MergeMetaLists(self, api_ml, config_ml, canonical_lists):
     # Step 1: Hydrate each MetaList into a corresponding TwitterList.
