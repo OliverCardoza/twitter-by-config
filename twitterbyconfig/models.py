@@ -168,17 +168,17 @@ class TwitterAccount:
                                       for ml in d.get('meta_lists', [])])
 
   @staticmethod
-  def FromApi(api):
+  def FromApi(twitter_api):
     account = TwitterAccount()
     # Follows
     account.follows = [TwitterUser.FromPythonTwitter(friend)
-                       for friend in api.GetFriends()]
+                       for friend in twitter_api.GetFriends()]
     # Lists and Meta-lists
     account.lists = []
     account.meta_lists = []
-    lists = api.GetLists()
+    lists = twitter_api.GetLists()
     for l in lists:
-      members = api.GetListMembers(list_id=l.id)
+      members = twitter_api.GetListMembers(list_id=l.id)
       twitter_list = TwitterList.FromPythonTwitter(l, members)
       if MetaList.IsMetaList(l.name):
         account.meta_lists.append(MetaList.FromTwitterList(twitter_list))

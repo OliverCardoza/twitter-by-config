@@ -1,7 +1,9 @@
 import dataclasses
 import unittest
+import twitter
 import twitterbyconfig as tbc
 
+from unittest.mock import MagicMock, call
 
 class TestTwitterAccount(unittest.TestCase):
 
@@ -70,6 +72,41 @@ class TestTwitterAccount(unittest.TestCase):
                                           meta_lists=[ml])
     account = tbc.TwitterAccount.FromConfigDict(config_dict)
     self.assertEqual(account, expected_account)
+
+  def test_FromApi(self):
+    mock_api = twitter.Api()
+    user1 = twitter.User.NewFromJsonDict({'id': 1, 'screen_name': 'Twitter'})
+    user2 = twitter.User.NewFromJsonDict(
+        {'id': 2, 'screen_name': 'BarackObama'})
+    mock_api.GetFriends = MagicMock(return_value=[user1])
+    list1 = twitter.List.NewFromJsonDict(
+        {'id': 10, 'name': 'Social Media', 'mode': 'private'})
+    list2 = twitter.List.NewFromJsonDict(
+        {'id': 20, 'name': 'META: All', 'mode': 'private'})
+    mock_api.GetLists = MagicMock(return_value=[list1, list2])
+    mock_api.GetListMembers = MagicMock()
+    mock_api.GetListMembers.side_effect = [[user1], [user1, user2]]
+    account = tbc.TwitterAccount.FromApi(mock_api)
+    # Verify correct mock calls.
+    mock_api.GetFriends.assert_called_once()
+    mock_api.GetLists.assert_called_once()
+    mock_api.GetListMembers.assert_has_calls([call(list_id=10),
+                                              call(list_id=20)])
+    # Verify correct account is created.
+    self.assertEqual(len(account.follows), 1)
+    self.assertEqual(account.follows[0].id, 1)
+    self.assertEqual(account.follows[0].username, 'Twitter')
+    self.assertEqual(len(account.lists), 1)
+    self.assertEqual(account.lists[0].id, 10)
+    self.assertEqual(account.lists[0].name, 'Social Media')
+    self.assertEqual(account.lists[0].is_private, True)
+    self.assertEqual(len(account.lists[0].members), 1)
+    self.assertEqual(account.lists[0].members[0].id, 1)
+    self.assertEqual(account.lists[0].members[0].username, 'Twitter')
+    self.assertEqual(len(account.meta_lists), 1)
+    self.assertEqual(account.meta_lists[0].name, 'META: All')
+    self.assertEqual(account.meta_lists[0].is_private, True)
+    self.assertEqual(account.meta_lists[0].twitter_list.id, 20)
 
   def test_ReadFromConfig(self):
     account = tbc.TwitterAccount.ReadFromConfig('testdata/simple_account.yaml')
