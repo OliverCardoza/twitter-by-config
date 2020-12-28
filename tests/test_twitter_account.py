@@ -8,34 +8,63 @@ from unittest.mock import MagicMock, call
 class TestTwitterAccount(unittest.TestCase):
 
   def test_ToConfigDict(self):
-    user1 = tbc.TwitterUser(id=1, username='Twitter')
-    user2 = tbc.TwitterUser(id=2, username='Facebook')
-    tl = tbc.TwitterList(id=10,
-                         name='Social Media',
-                         is_private=True,
-                         members=[user1, user2])
-    ml = tbc.MetaList(name='META: All',
-                      is_private=True,
-                      lists=['Social Media'])
-    account = tbc.TwitterAccount(follows=[user1],
-                                 lists=[tl],
-                                 meta_lists=[ml])
+    user1 = tbc.TwitterUser(id=1, username='Facebook')
+    user2 = tbc.TwitterUser(id=2, username='Twitter')
+    user3 = tbc.TwitterUser(id=3, username='zSortTest')
+    user4 = tbc.TwitterUser(id=4, username='ZzSortTest')
+    tl1 = tbc.TwitterList(id=10,
+                          name='aSortTest',
+                          is_private=True,
+                          members=[user4, user3])
+    tl2 = tbc.TwitterList(id=20,
+                          name='Social Media',
+                          is_private=True,
+                          members=[user2, user1])
+    ml1 = tbc.MetaList(name='META: All',
+                       is_private=True,
+                       lists=['Social Media'])
+    ml2 = tbc.MetaList(name='META: ZSortTest',
+                       is_private=True,
+                       lists=['Social Media', 'aSortTest'])
+    account = tbc.TwitterAccount(follows=[user3, user4, user1],
+                                 lists=[tl2, tl1],
+                                 meta_lists=[ml2, ml1])
 
     expected_dict = {
-      'follows': [{'username': 'Twitter'}],
-      'lists': [{
-          'name': 'Social Media',
-          'is_private': True, 
-          'members': [
-              {'username': 'Twitter'},
-              {'username': 'Facebook'},
-          ],
-      }],
-      'meta_lists': [{
-          'name': 'META: All',
-          'is_private': True,
-          'lists': ['Social Media'],
-      }],
+      'follows': [
+          {'username': 'Facebook'},
+          {'username': 'zSortTest'},
+          {'username': 'ZzSortTest'},
+      ],
+      'lists': [
+          {
+              'name': 'aSortTest',
+              'is_private': True,
+              'members': [
+                  {'username': 'zSortTest'},
+                  {'username': 'ZzSortTest'},
+              ],
+          },
+          {
+              'name': 'Social Media',
+              'is_private': True,
+              'members': [
+                  {'username': 'Facebook'},
+                  {'username': 'Twitter'},
+              ],
+          },
+      ],
+      'meta_lists': [
+          {
+              'name': 'META: All',
+              'is_private': True,
+              'lists': ['Social Media'],
+          }, {
+              'name': 'META: ZSortTest',
+              'is_private': True,
+              'lists': ['aSortTest', 'Social Media'],
+          },
+      ],
     }
     self.assertEqual(account.ToConfigDict(), expected_dict)
 

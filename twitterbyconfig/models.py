@@ -43,10 +43,12 @@ class TwitterList:
   members: list = None # list[TwitterUser]
 
   def ToConfigDict(self):
+    sorted_members = sorted(self.members,
+                            key=lambda member: member.username.lower())
     return {
       'name': self.name,
       'is_private': self.is_private,
-      'members': [member.ToConfigDict() for member in self.members],
+      'members': [member.ToConfigDict() for member in sorted_members],
     }
 
   @staticmethod
@@ -91,10 +93,11 @@ class MetaList:
       raise ValueError(
           'Invalid meta-list name ({0}), must start with: {1}'.format(
               self.name, META_LIST_PREFIX))
+    sorted_lists = sorted(self.lists, key=lambda lst: lst.lower())
     return {
       'name': self.name,
       'is_private': self.is_private,
-      'lists': self.lists,
+      'lists': sorted_lists,
     }
 
   def ToTwitterList(self, canonical_lists):
@@ -146,10 +149,16 @@ class TwitterAccount:
   meta_lists: list = None # list[MetaList]
 
   def ToConfigDict(self):
+    sorted_follows = sorted(self.follows,
+                            key=lambda user: user.username.lower())
+    sorted_lists = sorted(self.lists,
+                          key=lambda lst: lst.name.lower())
+    sorted_meta_lists = sorted(self.meta_lists,
+                               key=lambda lst: lst.name.lower())
     return {
-      'follows': [follow.ToConfigDict() for follow in self.follows],
-      'lists': [l.ToConfigDict() for l in self.lists],
-      'meta_lists': [ml.ToConfigDict() for ml in self.meta_lists],
+      'follows': [follow.ToConfigDict() for follow in sorted_follows],
+      'lists': [l.ToConfigDict() for l in sorted_lists],
+      'meta_lists': [ml.ToConfigDict() for ml in sorted_meta_lists],
     }
 
   def WriteToConfig(self, config_file):

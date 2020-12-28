@@ -28,7 +28,7 @@ class TestTwitterList(unittest.TestCase):
     expected_dict = {
       'name': 'Social Media',
       'is_private': True,
-      'members': [{'username': 'Twitter'}, {'username': 'Facebook'}],
+      'members': [{'username': 'Facebook'}, {'username': 'Twitter'}],
     }
     self.assertEqual(tl.ToConfigDict(), expected_dict)
 

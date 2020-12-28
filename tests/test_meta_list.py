@@ -13,7 +13,7 @@ class TestMetaList(unittest.TestCase):
                          members=[user1, user2])
     ml = tbc.MetaList(name='META: Politics',
                       is_private=True,
-                      lists=['Canadian Politics', 'US Politics'],
+                      lists=['US Politics', 'Canadian Politics'],
                       twitter_list=tl)
     expected_dict = {
       'name': 'META: Politics',
