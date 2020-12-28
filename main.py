@@ -29,7 +29,7 @@ def CreateApi():
 
 parser = argparse.ArgumentParser(
     description='Provides Twitter account management using a plaintext config file.')
-parser.add_argument('operation', type=str, choices=['download', 'upload'],
+parser.add_argument('operation', type=str, choices=['download', 'sync'],
                     help=('The operation to perform: \n'
                           '    download: downloads account data from Twitter'
                           ' and outputs to your config file\n'
@@ -47,12 +47,16 @@ if __name__ == '__main__':
     print('Account data downloaded, writing to file...')
     account.WriteToConfig(args.config_file)
     print('File updated from TwitterAPI source: {0}'.format(args.config_file))
-  elif args.operation == 'upload':
+  elif args.operation == 'sync':
     print('Reading account data from config file...')
     config_account = TwitterAccount.ReadFromConfig(args.config_file)
     print('Reading account data from Twitter API...')
     api_account = TwitterAccount.FromApi(api)
     account_merger = AccountMerger(api)
-    account_merger.MergeAccounts(api_account, config_account)
+    merged_account = account_merger.MergeAccounts(api_account, config_account)
+    write_back_to_config = (
+        input('Write back canonical follows/lists to config file? y/n: ') == 'y')
+    if write_back_to_config:
+      merged_account.WriteToConfig(args.config_file)
   else:
     raise ValueError('Unsupported operation: {0}'.format(args.operation))

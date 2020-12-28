@@ -21,17 +21,22 @@ class AccountMerger:
     self.api = api
 
   def MergeAccounts(self, api_account, config_account):
-    self._MergeFollows(api_account.follows, config_account.follows)
+    canonical_follows = self._MergeFollows(api_account.follows,
+                                           config_account.follows)
     canonical_lists = self._MergeLists(api_account.lists,
                                        config_account.lists)
     self._MergeMetaLists(api_account.meta_lists,
                          config_account.meta_lists,
                          canonical_lists)
+    return TwitterAccount(follows=canonical_follows,
+                          lists=canonical_lists,
+                          meta_lists=config_account.meta_lists)
 
   def _MergeFollows(self, api_follows, config_follows):
     # Step 1: Compute follow sets.
     api_set = {follow.username for follow in api_follows}
     config_set = {follow.username for follow in config_follows}
+    canonical_follows = {follow.username:follow for follow in api_follows}
     # Step 2: Add missing follows.
     follows_to_add = config_set.difference(api_set)
     self._PromptThenMaybeExecute(
@@ -39,7 +44,7 @@ class AccountMerger:
         summary='Merging follows will result in {0} follows added'.format(
             len(follows_to_add)),
         per_item_desc=lambda item: '    Follow: @{0}'.format(item),
-        per_item_executor=lambda item: self._AddFollow(item))
+        per_item_executor=lambda item: self._AddFollow(item, canonical_follows))
     # Step 3: Removing unnecessary follows.
     follows_to_remove = api_set.difference(config_set)
     self._PromptThenMaybeExecute(
@@ -47,16 +52,21 @@ class AccountMerger:
         summary='Merging follows will result in {0} follows removed'.format(
             len(follows_to_remove)),
         per_item_desc=lambda item: '    Unfollow: @{0}'.format(item),
-        per_item_executor=lambda item: self._Unfollow(item))
+        per_item_executor=lambda item: self._Unfollow(item, canonical_follows))
+    return canonical_follows.values()
 
-  def _AddFollow(self, follow):
+  def _AddFollow(self, follow, canonical_follows):
     try:
-      self.api.CreateFriendship(screen_name=follow)
+      pt_user = self.api.CreateFriendship(screen_name=follow)
+      user = TwitterUser.FromPythonTwitter(pt_user)
+      canonical_follows[user.name] = user
+
     except twitter.TwitterError as e:
       print('   Error adding @{0}: {1}'.format(follow, e))
 
-  def _Unfollow(self, follow):
+  def _Unfollow(self, follow, canonical_follows):
     self.api.DestroyFriendship(screen_name=follow)
+    del canonical_follows[follow]
 
   def _MergeLists(self, api_lists, config_lists):
     # Step 1: Compute list sets.

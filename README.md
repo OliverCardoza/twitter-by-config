@@ -50,14 +50,15 @@ pre-existing data you've already configured. Now you can make edits to this
 config file and use it to configure your Twitter account by uploading it
 as described in the next section.
 
-### Uploading Account config
+### Syncing Account config
 
-This process will take your config file as the source-of-truth and make
-mutations to your account via the Twitter API. All mutations will outline the
-proposed changes and ask for confirmation [y/n] before proceeding.
+This process will synchronize your account data between your config file and
+that returned by the Twitter API. Actions to synchronize the two versions will
+be proposed and performed based on confirmation dialogs [y/n]. The resulting
+data can then be optionally written back to your config file.
 
 ```
-python3 main.py upload twitter.yaml
+python3 main.py sync twitter.yaml
 ```
 
 ## Caveats
@@ -69,6 +70,7 @@ script:
 *   quirky handling of list name change logic (e.g. old list deleted, new list created)
 *   does not gracefully handle @username changes
 *   updating list privacy isn't yet supported (e.g. public <-> private)
+*   the sync command does not attempt to synchronize your meta-lists
 
 ## New Features
 
