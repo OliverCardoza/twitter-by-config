@@ -11,6 +11,13 @@ sudo apt-get install python3 python3-pip
 pip3 install python-twitter pyyaml
 ```
 
+NOTE: Until https://github.com/bear/python-twitter/issues/661 is resolved
+I install my `python-twitter` fork which fixes a bug for lists with >100 people:
+
+```
+pip3 install -e git+git://github.com/OliverCardoza/python-twitter.git@master#egg=python-twitter
+```
+
 ## Usage Instructions
 
 ### Set up
